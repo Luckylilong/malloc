@@ -16,3 +16,11 @@
 *.exe
 *.out
 *.app
+
+# vim
+*.swp
+*.swo
+*.un~
+
+# OS X
+*.DS_Store
