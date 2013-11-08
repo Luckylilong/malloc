@@ -19,6 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
+#include "malloc.h"
 
 // At any time, churn may have up to NUMSLOTS memory allocations
 #define NUMSLOTS 40
@@ -26,7 +27,7 @@
 char *slots[NUMSLOTS];
 size_t sizes[NUMSLOTS];
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
   int i,n,size,maxblock;
   long j;

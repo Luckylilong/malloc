@@ -4,52 +4,96 @@
 #include <string.h>
 #include "malloc.h"
 
-// performs next value alignment inline
+// performs value alignment inline
 // x is wrapped in its own paren to evaluate expressions passed in
 // before rounding operation
 #define align8(x) (((((x)-1) >> 3) << 3) + 8)
 
 static list_node* head = NULL;
 
+// aalocates size number of bytes on the heap, rounded up to the nearest multiple of 8
 void *malloc(size_t size) {
     long pg_size = sysconf(_SC_PAGESIZE);
     int stored = 0;
-    long end = (long) sbrk(0);
+    long end;
     list_node* current;
     if (head == NULL) {
         // set up head node
-        head = (list_node*) sbrk(pg_size);
-        end = (long) head;
-        // check OOM condition
-        if (end == -1) {
-            errno = ENOMEM;
-            return NULL;
+        int brk_size = 0;
+        while (brk_size < align8(size + sizeof(list_node))) {
+            head = (list_node*) sbrk(pg_size + size);
+            // check OOM condition
+            if (head == (void*) -1) {
+                errno = ENOMEM;
+                return NULL;
+            }
+            brk_size += pg_size;
         }
-        memset(head, 0, pg_size); 
+        end = (long) sbrk(0);
+        // clear pages requested 
+        memset(head, 0, brk_size); 
         head->next = NULL;
         head->prev = NULL;
+        head->free = false;
         head->size = align8(sizeof(list_node) + size); 
-        return head + size;
+        return head + sizeof(list_node);
     }
 
     // set up current and traverse linked list
     current = head;
-    while (current->next != NULL) {
+    // if has next node, and node is not free enough, traverse list
+    while (current->next != NULL && (!current->free && current->size > size)) {
         stored += current->size;
         current = current->next;
     }
-    if (align8(stored + (long) head + size) >= end) {
-        end = (long) sbrk(pg_size);
-        memset(, 0, pg_size); 
-        // check OOM
-        if (end == -1) {
-            errno = ENOMEM;
-            return NULL;
+    // Current node is free and right size, mark used and return
+    if (current->free && current->size <= size) {
+        current->free = false;
+        // clear to expected value
+        memset(current + sizeof(list_node), 0, current->size - sizeof(list_node));
+        return (void*) (current + sizeof(list_node));
+    } else { // No free space, add a new node
+        long size_req = align8(stored + (long) head + size);
+        // increase break until size requirement fufilled
+        while (size_req >= end) {
+            end = (long) sbrk(pg_size + size);
+            // check OOM
+            if (end == -1) {
+                errno = ENOMEM;
+                return NULL;
+            }
+            end = (long) sbrk(0);
+        }
+        current->next = (list_node*) align8(current->size + (long) current);
+        memset(current->next, 0, align8(sizeof(list_node) + size));
+        // assign previous pointer of next node to current node
+        current->next->prev = current;
+        current = current->next;
+        current->next = NULL;
+        current->free = false;
+        current->size = align8(sizeof(list_node) + size);
+        return (void*) (current + sizeof(list_node));
+    }
+}
+
+// Frees previously malloc'd location in memory for later use
+void free(void *ptr) {
+    list_node* current = head;
+    while ((void*) (current + sizeof(list_node)) != ptr) {
+        current = current->next;
+    }
+    current->free = true;
+    // merge with neighbors if free
+    if (current->next != NULL) {
+        if (current->next->free) {
+            current->size += current->next->size;
+            current->next = current->next->next;
         }
     }
-    current->next = (list_node*) align8(current->size + size);
-    // assign previous pointer of next node to current node
-    current->next->prev = current;
-    current = current->next;
-    current->size = align8(sizeof(list_node) + size);
+    if (current->prev != NULL) {
+        if (current->prev->free) {
+            current->prev->size += current->size;
+            current->prev->next = current->next;
+        }
+    }
 }
