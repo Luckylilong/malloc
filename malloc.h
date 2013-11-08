@@ -4,8 +4,9 @@
 #include <sys/types.h>
 
 typedef struct list_node {
-    size_t size;
     struct list_node* next;
+    struct list_node* prev;
+    size_t size;
 } list_node;
 
 void *malloc(size_t size);
