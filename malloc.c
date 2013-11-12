@@ -1,14 +1,13 @@
 #include <stdio.h>
-#include <math.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include "malloc.h"
 
 // performs value alignment inline
-// x is wrapped in its own paren to evaluate expressions passed in
-// before rounding operation
 #define align8(x) (((((x)-1) >> 3) << 3) + 8)
+// avoid dependency on math.h for one function
+#define ceil_loc(x) (((x) - (int) (x)) > 0 ? (int) (x) + 1 : (int) (x))
 
 static list_node* head = NULL;
 
@@ -16,12 +15,11 @@ static list_node* head = NULL;
 void *malloc(size_t size) {
     long pg_size = sysconf(_SC_PAGESIZE);
     int stored = 0;
-    long end;
     list_node* current;
     if (head == NULL) {
-        // set up head node
+        // set up head node, bump break appropriate size for request
         int block_size = align8(size + sizeof(list_node));
-        int num_pg = ceilf((float) block_size / pg_size);
+        int num_pg = ceil_loc((float) block_size / pg_size);
         head = (list_node*) sbrk(pg_size * num_pg);
         if (head == (void*) -1) {
             errno = ENOMEM;
@@ -48,17 +46,20 @@ void *malloc(size_t size) {
         stored += current->size;
         current = current->next;
     }
-    long size_req = align8(stored + (long) head + size);
+    stored += current->size;
+    long size_req = stored + (long) head + align8(sizeof(list_node) + size);
+    // not enough space, bump break
+    long end = (long) sbrk(0);
     if (size_req > end) {
+        // figure out how many pages we need and bump
         int block_size = align8(size_req - end);
-        int num_pg = ceilf((float) block_size / pg_size);
+        int num_pg = ceil_loc((float) block_size / pg_size);
         end = (long) sbrk(pg_size * num_pg);
         // check OOM
         if (end == -1) {
             errno = ENOMEM;
             return NULL;
         }
-        end = (long) sbrk(0);
     }
     current->next = (list_node*) (current->size + (void*) current);
     memset(current->next, 0, align8(sizeof(list_node) + size));
