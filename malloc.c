@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -11,7 +12,7 @@
 
 static list_node* head = NULL;
 
-// aalocates size number of bytes on the heap, rounded up to the nearest multiple of 8
+// locates size number of bytes on the heap, rounded up to the nearest multiple of 8
 void *malloc(size_t size) {
     long pg_size = sysconf(_SC_PAGESIZE);
     int stored = 0;
@@ -19,22 +20,16 @@ void *malloc(size_t size) {
     list_node* current;
     if (head == NULL) {
         // set up head node
-        int brk_size = 0;
-        while (brk_size < align8(size + sizeof(list_node))) {
-            head = (list_node*) sbrk(pg_size);
-            // check OOM condition
-            if (head == (void*) -1) {
-                errno = ENOMEM;
-                return NULL;
-            }
-            brk_size += pg_size;
+        int block_size = align8(size + sizeof(list_node));
+        int num_pg = ceilf((float) block_size / pg_size);
+        head = (list_node*) sbrk(pg_size * num_pg);
+        if (head == (void*) -1) {
+            errno = ENOMEM;
+            return NULL;
         }
-        end = (long) sbrk(0);
         // clear pages requested 
-        memset(head, 0, brk_size); 
-        head->next = NULL;
-        head->prev = NULL;
-        head->free = false;
+        memset(head, 0, pg_size * num_pg); 
+        // set size allocted to block + header
         head->size = align8(sizeof(list_node) + size); 
         return (void*) head + sizeof(list_node);
     }
@@ -54,9 +49,10 @@ void *malloc(size_t size) {
         current = current->next;
     }
     long size_req = align8(stored + (long) head + size);
-    // increase break until size requirement fufilled
     if (size_req > end) {
-        end = (long) sbrk(pg_size);
+        int block_size = align8(size_req - end);
+        int num_pg = ceilf((float) block_size / pg_size);
+        end = (long) sbrk(pg_size * num_pg);
         // check OOM
         if (end == -1) {
             errno = ENOMEM;
@@ -65,6 +61,7 @@ void *malloc(size_t size) {
         end = (long) sbrk(0);
     }
     current->next = (list_node*) (current->size + (void*) current);
+    memset(current->next, 0, align8(sizeof(list_node) + size));
     // assign previous pointer of next node to current node
     current->next->prev = current;
     // move current to new end of list
@@ -72,7 +69,6 @@ void *malloc(size_t size) {
     current->next = NULL; // end of list marker
     current->free = false;
     current->size = align8(sizeof(list_node) + size);
-    memset((void*) current + sizeof(list_node), 0, current->size - sizeof(list_node));
     return ((void*) current + sizeof(list_node));
 }
 
