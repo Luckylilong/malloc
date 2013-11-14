@@ -24,8 +24,6 @@ void *malloc(size_t size) {
         if (head == (void*) - 1) {
             return NULL;
         }
-        // clear pages requested 
-        /*memset(head, 0, pg_size * num_pg); */
         // set size allocted to block + header
         head->size = align8(sizeof(list_node) + size); 
         head->next = NULL;
@@ -41,7 +39,6 @@ void *malloc(size_t size) {
         if (current->free && (current->size - sizeof(list_node)) >= size) {
             current->free = false;
             // clear to expected value
-            /*memset((void*) current + sizeof(list_node), 0, current->size - sizeof(list_node));*/
             return ((void*) current + sizeof(list_node));
         }
         stored += current->size;
@@ -62,7 +59,6 @@ void *malloc(size_t size) {
         }
     }
     current->next = (list_node*) (current->size + (void*) current);
-    /*memset(current->next, 0, align8(sizeof(list_node) + size));*/
     // move current to new end of list
     current = current->next;
     current->next = NULL; // end of list marker
