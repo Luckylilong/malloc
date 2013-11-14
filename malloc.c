@@ -25,9 +25,11 @@ void *malloc(size_t size) {
             return NULL;
         }
         // clear pages requested 
-        memset(head, 0, pg_size * num_pg); 
+        /*memset(head, 0, pg_size * num_pg); */
         // set size allocted to block + header
         head->size = align8(sizeof(list_node) + size); 
+        head->next = NULL;
+        head->free = false;
         return (void*) head + sizeof(list_node);
     }
 
@@ -36,12 +38,10 @@ void *malloc(size_t size) {
     // if has next node, and node is not free enough, traverse list
     while (current->next != NULL) {
         // Current node is free and right size, mark used and return
-        /*printf("Node: %p, size %i, free %i, next %p\n", current, current->size, current->free, current->next);*/
         if (current->free && (current->size - sizeof(list_node)) >= size) {
             current->free = false;
             // clear to expected value
-            printf("reallocating free node\n");
-            memset((void*) current + sizeof(list_node), 0, current->size - sizeof(list_node));
+            /*memset((void*) current + sizeof(list_node), 0, current->size - sizeof(list_node));*/
             return ((void*) current + sizeof(list_node));
         }
         stored += current->size;
@@ -60,12 +60,9 @@ void *malloc(size_t size) {
         if (end == -1) {
             return NULL;
         }
-        printf("break moved to %li\n", end);
     }
     current->next = (list_node*) (current->size + (void*) current);
-    memset(current->next, 0, align8(sizeof(list_node) + size));
-    // assign previous pointer of next node to current node
-    current->next->prev = current;
+    /*memset(current->next, 0, align8(sizeof(list_node) + size));*/
     // move current to new end of list
     current = current->next;
     current->next = NULL; // end of list marker
@@ -76,32 +73,55 @@ void *malloc(size_t size) {
 
 // Frees previously malloc'd location in memory for later use
 void free(void *ptr) {
-    if (ptr != NULL) {
+    if (ptr) {
         // find header for given pointer
         list_node* current = (list_node*) ptr - 1;
         current->free = true;
-        // merge with neighbors if free
-        if (current->next != NULL) {
-            if (current->next->free) {
-                current->size += current->next->size;
-                if (current->next->next != NULL) {
-                    current->next = current->next->next;
-                    current->next->next->prev = current;
-                } else {
-                    current->next = NULL;
-                }
-            }
-        }
-        if (current->prev != NULL) {
-            if (current->prev->free) {
-                current->prev->size += current->size;
-                if (current->next != NULL) {
-                    current->prev->next = current->next;
-                    current->next->prev = current->prev;
-                } else {
-                    current->prev->next = NULL;
-                }
-            }
-        }
     }
+}
+
+// Allocate an array, zero filled.
+void *calloc(size_t nmemb, size_t size) {
+    // sizing doesn't make sense, exit
+    if (nmemb <= 0 || size <= 0) {
+        return NULL;
+    }
+
+    int array_size = nmemb * size;
+    void* ptr = malloc(array_size);
+    if (!ptr) {
+        return NULL;
+    }
+    memset(ptr, 0, array_size);
+    return ptr;
+}
+
+// make requested memory location bigger, without changing contents
+void *realloc(void *pointer, size_t size) {
+    if (pointer) {
+        // resize to 0 = free
+        // resize to negative: user incompetent, destroy their memory to spite them
+        if (size <= 0) {
+            free(pointer);
+            return NULL;
+        }
+        // find header, current size
+        list_node* node = (list_node*) pointer - 1;
+        int cur_size = node->size - sizeof(list_node);
+        // resize to same size = return the array
+        if (cur_size == size) {
+            return pointer;
+        }
+        // copy data to new array, free old, exit
+        void* new_ptr = malloc(size);
+        // OOM
+        if (!new_ptr) {
+            return NULL;
+        }
+        memcpy(new_ptr, pointer, cur_size);
+        free(pointer);
+        return new_ptr;
+    }
+    // passed in null, get null back.
+    return NULL;
 }

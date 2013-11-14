@@ -64,14 +64,14 @@ int main(int argc, char *argv[])
             // Going to free slot[n]
             // Check contents to see if it's still 0,1,2,3,4,...
             for (j=1; j<sizes[n]; j++) {
-                printf("%u ", (unsigned char) *(slots[n]+j));
+                /*printf("%u ", (unsigned char) *(slots[n]+j));*/
                 if (*(slots[n]+j) != (char) j) {
                     printf("Memory corruption detected in array %i, size %i.\n", n, (int) sizes[n]);
                     printf("Expected %u, found %u.\n", (unsigned char) j, (unsigned char) *(slots[n]+j));
                     exit(1);
                 }
             }
-            printf("\n");
+            /*printf("\n");*/
 
             if (verbose) printf("freeing slot %d.\n",n);
             free(slots[n]);
