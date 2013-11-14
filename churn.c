@@ -29,71 +29,74 @@ size_t sizes[NUMSLOTS];
 
 int main(int argc, char *argv[])
 {
-  int i,n,size,maxblock;
-  long j;
-  int verbose=0;
+    int i,n,size,maxblock;
+    long j;
+    int verbose=0;
 
-  // Read arguments
-  maxblock = -1;
-  if (argc == 3) {
-    if (!strcmp(argv[1],"-d")) {
-      maxblock = atoi(argv[2]);
-      verbose = 1;
+    // Read arguments
+    maxblock = -1;
+    if (argc == 3) {
+        if (!strcmp(argv[1],"-d")) {
+            maxblock = atoi(argv[2]);
+            verbose = 1;
+        }
     }
-  }
-  if (argc == 2)
-    maxblock = atoi(argv[1]);
+    if (argc == 2)
+        maxblock = atoi(argv[1]);
 
-  if (maxblock <= 0) {
-    fprintf(stderr,"usage: churn [-d] maxblock\n");
-    exit(1);
-  }
-
-  // Initialize
-  for (i = 0; i<NUMSLOTS; i++) slots[i] = NULL;
-  srand(time(NULL));
-
-  long mallocs=0,frees=0;  // number of mallocs, number of frees
-  printf("mallocs\tfrees\tsbrk\n");
-
-  // Main loop:
-  while (1) {
-    n = rand() % NUMSLOTS;
-    
-    if (slots[n]) {
-      // Going to free slot[n]
-      // Check contents to see if it's still 0,1,2,3,4,...
-      for (j=1; j<sizes[n]; j++) {
-	if (*(slots[n]+j) != (char) j) {
-	  printf("Memory corruption detected.\n");
-	  exit(1);
-	}
-      }
-      
-      if (verbose) printf("freeing slot %d.\n",n);
-      free(slots[n]);
-      slots[n] = NULL;
-      frees++;
-
-    } else {
-      // Going to malloc slot[n]
-      if (verbose) printf("malloc slot %d.\n",n);
-
-      sizes[n] = rand() % maxblock + 1;
-      slots[n] = (char *) malloc (sizes[n]);
-      if (slots[n] == NULL) {
-	fprintf(stderr,"out of memory\n");
-	exit(1);
-      }
-      
-      // Fill block with 0,1,2,3,4,...
-      for (j=0; j<sizes[n]; j++) *(slots[n]+j) = (char) j;
-
-      mallocs++;
+    if (maxblock <= 0) {
+        fprintf(stderr,"usage: churn [-d] maxblock\n");
+        exit(1);
     }
-    
-    // Periodically report progress
-    if ((mallocs + frees) % 1000 == 0) 
-      printf("%ld\t%ld\t%p\n",mallocs,frees,sbrk(0));
-  }
+
+    // Initialize
+    for (i = 0; i<NUMSLOTS; i++) slots[i] = NULL;
+    srand(time(NULL));
+
+    long mallocs=0,frees=0;  // number of mallocs, number of frees
+    printf("mallocs\tfrees\tsbrk\n");
+
+    // Main loop:
+    while (1) {
+        n = rand() % NUMSLOTS;
+
+        if (slots[n]) {
+            // Going to free slot[n]
+            // Check contents to see if it's still 0,1,2,3,4,...
+            for (j=1; j<sizes[n]; j++) {
+                printf("%u ", (unsigned char) *(slots[n]+j));
+                if (*(slots[n]+j) != (char) j) {
+                    printf("Memory corruption detected in array %i, size %i.\n", n, (int) sizes[n]);
+                    printf("Expected %u, found %u.\n", (unsigned char) j, (unsigned char) *(slots[n]+j));
+                    exit(1);
+                }
+            }
+            printf("\n");
+
+            if (verbose) printf("freeing slot %d.\n",n);
+            free(slots[n]);
+            slots[n] = NULL;
+            frees++;
+
+        } else {
+            // Going to malloc slot[n]
+            if (verbose) printf("malloc slot %d.\n",n);
+
+            sizes[n] = rand() % maxblock + 1;
+            slots[n] = (char *) malloc (sizes[n]);
+            if (slots[n] == NULL) {
+                fprintf(stderr,"out of memory\n");
+                exit(1);
+            }
+
+            // Fill block with 0,1,2,3,4,...
+            for (j=0; j<sizes[n]; j++) *(slots[n]+j) = (char) j;
+
+            mallocs++;
+        }
+
+        // Periodically report progress
+        if ((mallocs + frees) % 1000 == 0) 
+            printf("%ld\t%ld\t%p\n",mallocs,frees,sbrk(0));
+    }
 }

@@ -21,8 +21,7 @@ void *malloc(size_t size) {
         int block_size = align8(size + sizeof(list_node));
         int num_pg = ceil_loc((float) block_size / pg_size);
         head = (list_node*) sbrk(pg_size * num_pg);
-        if (head == (void*) -1) {
-            errno = ENOMEM;
+        if (head == (void*) - 1) {
             return NULL;
         }
         // clear pages requested 
@@ -37,9 +36,11 @@ void *malloc(size_t size) {
     // if has next node, and node is not free enough, traverse list
     while (current->next != NULL) {
         // Current node is free and right size, mark used and return
-        if (current->free && (current->size - sizeof(list_node)) <= size) {
+        /*printf("Node: %p, size %i, free %i, next %p\n", current, current->size, current->free, current->next);*/
+        if (current->free && (current->size - sizeof(list_node)) >= size) {
             current->free = false;
             // clear to expected value
+            printf("reallocating free node\n");
             memset((void*) current + sizeof(list_node), 0, current->size - sizeof(list_node));
             return ((void*) current + sizeof(list_node));
         }
@@ -57,9 +58,9 @@ void *malloc(size_t size) {
         end = (long) sbrk(pg_size * num_pg);
         // check OOM
         if (end == -1) {
-            errno = ENOMEM;
             return NULL;
         }
+        printf("break moved to %li\n", end);
     }
     current->next = (list_node*) (current->size + (void*) current);
     memset(current->next, 0, align8(sizeof(list_node) + size));
@@ -76,22 +77,30 @@ void *malloc(size_t size) {
 // Frees previously malloc'd location in memory for later use
 void free(void *ptr) {
     if (ptr != NULL) {
-        list_node* current = head;
-        while (((void*) current + sizeof(list_node)) != ptr) {
-            current = current->next;
-        }
+        // find header for given pointer
+        list_node* current = (list_node*) ptr - 1;
         current->free = true;
         // merge with neighbors if free
         if (current->next != NULL) {
             if (current->next->free) {
                 current->size += current->next->size;
-                current->next = current->next->next;
+                if (current->next->next != NULL) {
+                    current->next = current->next->next;
+                    current->next->next->prev = current;
+                } else {
+                    current->next = NULL;
+                }
             }
         }
         if (current->prev != NULL) {
             if (current->prev->free) {
                 current->prev->size += current->size;
-                current->prev->next = current->next;
+                if (current->next != NULL) {
+                    current->prev->next = current->next;
+                    current->next->prev = current->prev;
+                } else {
+                    current->prev->next = NULL;
+                }
             }
         }
     }
